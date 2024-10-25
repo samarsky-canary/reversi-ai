@@ -1,9 +1,38 @@
+import math
 from collections import OrderedDict
+from copy import deepcopy
+from enum import Enum
 
 from color import Color
 
+
+def bot_turn(ed_board: list[list[Color]], ed_color: Color) -> tuple[int, int]:
+    print(ed_board)
+    new_board = OrderedDict((Cord(i, j), Color.EMPTY) for i in range(8) for j in range(8))
+
+    for i in range(8):
+        for j in range(8):
+            new_board[Cord(i, j)] = ed_board[i][j]
+
+    game = Game(new_board, ed_color)
+    _, move = BotAi.get_next_move(game, ed_color)
+
+    for i in range(8):
+        for j in range(8):
+            if Cord(i, j) == move:
+                return i, j
+    return -1, -1
+
 # ===================================================================================
-# coordination
+# Coordinates
+# ===================================================================================
+class GameState(Enum):
+    IN_PROGRESS = 0
+    BLACK_WINS = 1
+    WHITE_WINS = 2
+    DRAW = 3
+# ===================================================================================
+# Coordinates
 # ===================================================================================
 class Cord():
 
@@ -59,216 +88,141 @@ class Game:
         # creating the board as 64 tiles
         self.board = OrderedDict((Cord(i, j), Color.EMPTY) for i in range(8) for j in range(8))
 
-        if (board is None):
+        if board is None:
             self.board[Cord(3, 3)] = Color.WHITE
             self.board[Cord(4, 4)] = Color.WHITE
             self.board[Cord(3, 4)] = Color.BLACK
             self.board[Cord(4, 3)] = Color.BLACK
+        else:
+            self.board = deepcopy(board)
 
+        if player is None:
+            self.current_player = Color.BLACK
+        else:
+            self.current_player = player
         # creating initial scores
+
+        self.whites = self.colored_fields(Color.WHITE)
+        self.blacks = self.colored_fields(Color.BLACK)
         self.game_state = self.outcome()
 
+    def enemy_color(self):
+        return Color.BLACK if self.current_player == Color.WHITE else Color.WHITE
+
     # determines if the disk in the given coordination is current players or not
-    def is_enemy_disc(self, coord):
-        return (coord.is_in_board() and
-                self.board[coord] not in [self.player.field, self.EMPTY])
+    def is_enemy_field(self, cord):
+        return (cord.is_in_board() and
+                self.board[cord] not in [self.current_player, Color.EMPTY])
 
-    def is_ally_disc(self, coord):
-        return coord.is_in_board() and self.board[coord] == self.player.field
-
+    def is_friend_field(self, cord):
+        return cord.is_in_board() and self.board[cord] == self.current_player
 
     # checking if the disc is empty
-    def is_empty_disc(self, coord):
-        return coord.is_in_board() and self.board[coord] == self.EMPTY
+    def is_empty_field(self, coord):
+        return coord.is_in_board() and self.board[coord] == Color.EMPTY
 
     # returns an array of all current player discs
-    def current_player_discs(self):
-        all_coords = [Cord(i, j) for i in range(8) for j in range(8)]
-        return [coord for coord in all_coords
-                if self.board[coord] == self.player.field]
+    def friend_fields(self):
+        fields = [Cord(i, j) for i in range(8) for j in range(8)]
+        return [cord for cord in fields if self.board[cord] == self.current_player]
 
     # array of black player discs
-    def black_player_discs(self):
-        all_coords = [Cord(i, j) for i in range(8) for j in range(8)]
-        return [coord for coord in all_coords
-                if self.board[coord] == self.black_player.field]
+    def enemy_fields(self):
+        enemy_color = self.enemy_color()
+        fields = [Cord(i, j) for i in range(8) for j in range(8)]
+        return [cord for cord in fields if self.board[cord] == enemy_color]
 
-    # array of white player discs
-    def white_player_discs(self):
-        all_coords = [Cord(i, j) for i in range(8) for j in range(8)]
-        return [coord for coord in all_coords
-                if self.board[coord] == self.white_player.field]
+    def colored_fields(self, color: Color):
+        fields = [Cord(i, j) for i in range(8) for j in range(8)]
+        return [cord for cord in fields if self.board[cord] == color]
 
     # changes the turn
-    def change_current_player(self):
-        if self.player == self.black_player:
-            self.player = self.white_player
-        else:
-            self.player = self.black_player
+    def change_player(self):
+        self.current_player = self.enemy_color()
 
     # array of clickable cordinations
-    def available_fields(self):
-        discs = self.current_player_discs()
-        result = []
-        for disc in discs:
-            for d in self.DIRECTIONS:
-                coord = disc + d
-                while self.is_enemy_disc(coord):
-                    coord += d
-                    if self.is_empty_disc(coord):
-                        result += [coord]
-        return result
+    def available_moves(self):
+        friends = self.friend_fields()
+        av_fields = []
+        for friend in friends:
+            for direction in self.DIRECTIONS:
+                field = friend + direction
+                while self.is_enemy_field(field):
+                    field += direction
+                    if self.is_empty_field(field):
+                        av_fields += [field]
+        return av_fields
 
-    # if coordination is in available fileds
-    def is_valid_move(self, coord):
-        return coord in self.available_fields()
+    # if coordination is in available fields
+    def is_valid_move(self, cord):
+        return cord in self.available_moves()
 
-    def play(self, coord):
-        if self.game_state != self.GAME_STATES['IN_PROGRESS']:
-            raise GameHasEndedError('Game has already ended')
-        if not self.is_valid_move(coord):
-            raise InvalidMoveError("Not valid move")
+    def is_game_over(self):
+        return self.game_state != GameState.IN_PROGRESS
+
+    def play(self, move):
+        if self.is_game_over():
+            raise Exception('Game has already ended')
+        if not self.is_valid_move(move):
+            raise Exception("Not valid move")
 
         # fields that are flipped after a move
         won_fields = []
-        for d in self.DIRECTIONS:
-            current_coord = coord + d
-            while self.is_enemy_disc(current_coord):
-                current_coord += d
+        for direction in self.DIRECTIONS:
+            field = move + direction
+            while self.is_enemy_field(field):
+                field += direction
 
-            if self.is_ally_disc(current_coord):
-                won_fields += coord.to(current_coord, d)
+            if self.is_friend_field(field):
+                won_fields += move.to(field, direction)
 
         # change the field to the player's field
-        for coord in won_fields:
-            self.board[coord] = self.player.field
+        for move in won_fields:
+            self.board[move] = self.current_player
 
-        # update player result after aech move
-        self.black_player.result = len(self.black_player_discs())
-        self.white_player.result = len(self.white_player_discs())
-        self.change_current_player()
+        # update player result after each move
+        self.blacks = len(self.colored_fields(Color.BLACK))
+        self.whites = len(self.colored_fields(Color.WHITE))
+        self.change_player()
         self.game_state = self.outcome()
 
     # run after every move
     def outcome(self):
         # change player if there is no move for first player
-        if not self.available_fields():
-            self.change_current_player()
+        if not self.available_moves():
+            self.change_player()
 
             # if second player had no move determine the winner
-            if not self.available_fields():
-                if self.white_player.result > self.black_player.result:
-                    return self.GAME_STATES["WHITE_WINS"]
-                elif self.white_player.result < self.black_player.result:
-                    return self.GAME_STATES["BLACK_WINS"]
+            if not self.available_moves():
+                if self.whites > self.blacks:
+                    return GameState.WHITE_WINS
+                elif self.whites < self.blacks:
+                    return GameState.BLACK_WINS
                 else:
-                    return self.GAME_STATES["DRAW"]
-        return self.GAME_STATES["IN_PROGRESS"]
+                    return GameState.DRAW
+        return GameState.IN_PROGRESS
+
+    @staticmethod
+    def print_color(color: Color):
+        if color == Color.BLACK:
+            return 'o'
+        if color == Color.WHITE:
+            return 'x'
+        return ' '
 
     # returns a string of current board situation
     @staticmethod
     def print_board(board):
-        return '\n'.join(''.join(board[Cord(i, j)] for j in range(8))
-                         for i in range(8))
+        output = ''
+        for i in range(8):
+            colors = []
+            for j in range(8):
+                colors.append(Game.print_color(board[i][j]))
 
-    # information to show about the current game
-    def game_info(self):
-        player_map = {
-            "b": "black",
-            "w": "white",
-            "m": "moves"
-        }
-        board = self.board.copy()
-        moves = self.available_fields()
-        for move in moves:
-            board[move] = self.MOVES
+            output = '\n'.join(colors)
+        return output
 
-        return {
-            "board": self.print_board(board),
-            "player": player_map[self.player.field],
-            "state": self.game_state,
-            "white_count": self.white_player.result,
-            "black_count": self.black_player.result
-        }
-
-
-def bot_turn(board: list[list[Color]], ed_color: Color) -> tuple[int, int]:
-    print(board)
-
-    game = Game()
-    for i in range(8):
-        for j in range(8):
-            color = game.EMPTY
-            if board[i][j] == Color.BLACK:
-                color = game.BLACK
-            elif board[i][j] == Color.WHITE:
-                color = game.WHITE
-            game.board[Cord(i,j)] = color
-    conv_color = 'w'
-    if ed_color == Color.BLACK:
-        conv_color = 'b'
-    _, move = BotAi.minimax(game.board, 3, conv_color)
-
-    for i in range(8):
-        for j in range(8):
-            if Cord(i,j) == move:
-                return (i,j)
-    return (-1, -1)
-
-
-class AIHelper():
-    MAX_PLAYER = 'w'
-    MIN_PLAYER = 'b'
-    INFINITY = 1.0e+10
-
-    """
-    Helper interface class for the AI
-        $1. available moves (board, player)
-        $2. get_resulting_board -> (board, player, coord)
-        $3. player pools (board, player)
-        $4. check if game has ended (board)
-    """
-
-    # it is created when the game starts
-    def __init__(self, board=None):
-        self.game = Game()
-        if board:
-            self.set_board(board)
-
-    # changes to board form ai to game board
-    def set_board(self, board):
-        self.game.board = FormatConverter.ai_to_game_board(board)
-
-    # sets a player
-    def set_player(self, player):
-        self.game.player = Player(player)
-
-    # finding available moves
-    def available_moves(self, board, player):
-        self.set_board(board)
-        self.set_player(player)
-        return self.game.available_fields()
-
-    # gets the changes of the human player
-    def get_resulting_board(self, board, player, coord):
-        self.set_board(board)
-        self.set_player(player)
-        self.game.play(coord)
-        return FormatConverter.game_to_ai_board(self.game.board)
-
-
-    def player_pool(self, board, player):
-        self.set_board(board)
-        # probably this is an error
-        return ''.join(''.join(row) for row in self.board).count(player)
-
-    # defines if the game is over or not
-    def is_game_over(self, board):
-        self.set_board(board)
-        return self.game.outcome() != self.game.GAME_STATES["IN_PROGRESS"]
-
-
-class FormatConverter():
+class FormatConverter:
 
     @staticmethod
     def ai_to_game_board(ai_board):
@@ -282,57 +236,63 @@ class FormatConverter():
 
 class BotAi:
 
+    # finding available moves
+    @staticmethod
+    def available_moves(board, player):
+        game = Game(board, player)
+        return game.available_moves()
+
+
     # runs the minimax with precision
     @staticmethod
-    def get_next_move(board, color):
+    def get_next_move(game: Game, color):
         # the depth argument defines how many levels deep we go before using heuristic
-        _, move = BotAi.minimax(board, 3, color)
+        _, move = BotAi.minimax(game.board, 3, color, color)
         return move
 
     @staticmethod
-    def minimax(board, depth, player):
-        helper = AIHelper()
-
+    def minimax(board, depth, player, original_player):
+        game = Game(board, player)
         # if game is over then return something
-        if helper.is_game_over(board) or depth == 0:
-            return (BotAi.game_heuristic(board), None)
+        if game.is_game_over() or depth == 0:
+            return BotAi.game_heuristic(board, original_player), None
 
         best_move = None
+
+        max_player = player == original_player
         # if it is a max node
-        if player == AIHelper.MAX_PLAYER:
-            best_value = -AIHelper.INFINITY
-            available_moves = helper.available_moves(
-                board, AIHelper.MAX_PLAYER)
+        if max_player:
+            best_value = -math.inf
+            available_moves = game.available_moves()
             for move in available_moves:
-                node = helper.get_resulting_board(
-                    board, AIHelper.MAX_PLAYER, move)
-                value, _ = BotAi.minimax(
-                    node, depth - 1, AIHelper.MIN_PLAYER)
+                game_bckp = deepcopy(game)
+                game.play(move)
+                value, _ = BotAi.minimax(game.board, depth - 1, game.current_player, original_player)
+                game = game_bckp #revert move
                 if value > best_value:
                     best_value = value
                     best_move = move
-            return (best_value, best_move)
+            return best_value, best_move
 
         # if it is a min node
         else:
-            best_value = AIHelper.INFINITY
-            available_moves = helper.available_moves(
-                board, AIHelper.MIN_PLAYER)
+            best_value = math.inf
+            available_moves = game.available_moves()
             for move in available_moves:
-                node = helper.get_resulting_board(
-                    board, AIHelper.MIN_PLAYER, move)
-                value, _ = BotAi.minimax(
-                    node, depth - 1, AIHelper.MAX_PLAYER)
+                game_bckp = deepcopy(game)
+                game.play(move)
+                value, _ = BotAi.minimax(game.board, depth - 1, game.current_player, original_player)
+                game = game_bckp # revert move
                 if value < best_value:
                     best_value = value
                     best_move = move
-            return (best_value, best_move)
+            return best_value, best_move
 
     @staticmethod
-    def game_heuristic(board):
+    def game_heuristic(board, player):
         # defining the ai and Opponent color
-        my_color = AIHelper.MAX_PLAYER
-        opp_color = AIHelper.MIN_PLAYER
+        my_color = player
+        opp_color = Color.WHITE if player == Color.BLACK else Color.BLACK
 
         my_tiles = 0
         opp_tiles = 0
@@ -511,8 +471,8 @@ class BotAi:
         opponent’s mobility and increasing one’s own mobility
         '''
         # basically it calculates the difference between available moves
-        my_tiles = len(AIHelper().available_moves(board, AIHelper.MAX_PLAYER))
-        opp_tiles = len(AIHelper().available_moves(board, AIHelper.MIN_PLAYER))
+        my_tiles = len(BotAi.available_moves(board, my_color))
+        opp_tiles = len(BotAi.available_moves(board, opp_color))
 
         if my_tiles > opp_tiles:
             m = (100.0 * my_tiles) / (my_tiles + opp_tiles)
