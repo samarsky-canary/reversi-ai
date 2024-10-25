@@ -23,6 +23,7 @@ def session(board: list[list[Color]], first_bot, second_bot) -> dict:
             
         old_board = deepcopy(board)
         chosen_field = current_bot(board, current_color)
+        print("({}, {})".format(chosen_field[0], chosen_field[1]))
 
         if rules.board_diff(old_board, board) or not rules.check_field_validness(chosen_field) \
             or chosen_field is None and len(fields) != 0 or not rules.turn_validness(chosen_field, fields):

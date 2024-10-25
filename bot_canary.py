@@ -7,7 +7,6 @@ from color import Color
 
 
 def bot_turn(ed_board: list[list[Color]], ed_color: Color) -> tuple[int, int]:
-    print(ed_board)
     new_board = OrderedDict((Cord(i, j), Color.EMPTY) for i in range(8) for j in range(8))
 
     for i in range(8):
@@ -15,13 +14,8 @@ def bot_turn(ed_board: list[list[Color]], ed_color: Color) -> tuple[int, int]:
             new_board[Cord(i, j)] = ed_board[i][j]
 
     game = Game(new_board, ed_color)
-    _, move = BotAi.get_next_move(game, ed_color)
-
-    for i in range(8):
-        for j in range(8):
-            if Cord(i, j) == move:
-                return i, j
-    return -1, -1
+    move: Cord = BotAi.get_next_move(game, ed_color)
+    return move.x, move.y
 
 # ===================================================================================
 # Coordinates
@@ -102,8 +96,8 @@ class Game:
             self.current_player = player
         # creating initial scores
 
-        self.whites = self.colored_fields(Color.WHITE)
-        self.blacks = self.colored_fields(Color.BLACK)
+        self.whites = len(self.colored_fields(Color.WHITE))
+        self.blacks = len(self.colored_fields(Color.BLACK))
         self.game_state = self.outcome()
 
     def enemy_color(self):
@@ -245,9 +239,9 @@ class BotAi:
 
     # runs the minimax with precision
     @staticmethod
-    def get_next_move(game: Game, color):
+    def get_next_move(game: Game, color) -> Cord:
         # the depth argument defines how many levels deep we go before using heuristic
-        _, move = BotAi.minimax(game.board, 3, color, color)
+        (df, move) = BotAi.minimax(game.board, 2, color, color)
         return move
 
     @staticmethod
@@ -326,22 +320,22 @@ class BotAi:
         # =============================================================================================
         for i in range(8):
             for j in range(8):
-                if board[i][j] == my_color:
+                if board[Cord(i,j)] == my_color:
                     d += V[i][j]
                     my_tiles += 1
-                elif board[i][j] == opp_color:
+                elif board[Cord(i,j)] == opp_color:
                     d -= V[i][j]
                     opp_tiles += 1
 
                 # calculates the number of blank spaces around me
                 # if the tile is not empty take a step in each direction
-                if board[i][j] != ' ':
+                if board[Cord(i,j)] != Color.EMPTY:
                     for k in range(8):
                         x = i + X1[k]
                         y = j + Y1[k]
-                        if (x >= 0 and x < 8 and y >= 0 and y < 8 and
-                                board[x][y] == ' '):
-                            if board[i][j] == my_color:
+                        if (0 <= x < 8 and 0 <= y < 8 and
+                                board[Cord(i,j)] == Color.EMPTY):
+                            if board[Cord(i,j)] == my_color:
                                 my_front_tiles += 1
                             else:
                                 opp_front_tiles += 1
@@ -376,21 +370,21 @@ class BotAi:
         '''
         # ===============================================================================================
         my_tiles = opp_tiles = 0
-        if board[0][0] == my_color:
+        if board[Cord(0,0)] == my_color:
             my_tiles += 1
-        elif board[0][0] == opp_color:
+        elif board[Cord(0,0)] == opp_color:
             opp_tiles += 1
-        if board[0][7] == my_color:
+        if board[Cord(0,7)] == my_color:
             my_tiles += 1
-        elif board[0][7] == opp_color:
+        elif board[Cord(0,7)] == opp_color:
             opp_tiles += 1
-        if board[7][0] == my_color:
+        if board[Cord(7,0)] == my_color:
             my_tiles += 1
-        elif board[7][0] == opp_color:
+        elif board[Cord(7,0)] == opp_color:
             opp_tiles += 1
-        if board[7][7] == my_color:
+        if board[Cord(7,7)] == my_color:
             my_tiles += 1
-        elif board[7][7] == opp_color:
+        elif board[Cord(7,7)] == opp_color:
             opp_tiles += 1
         c = 25 * (my_tiles - opp_tiles)
 
@@ -403,60 +397,60 @@ class BotAi:
         '''
         # ===============================================================================================
         my_tiles = opp_tiles = 0
-        if board[0][0] == ' ':
-            if board[0][1] == my_color:
+        if board[Cord(0,0)] == Color.EMPTY:
+            if board[Cord(0,1)] == my_color:
                 my_tiles += 1
-            elif board[0][1] == opp_color:
+            elif board[Cord(0,1)] == opp_color:
                 opp_tiles += 1
-            if board[1][1] == my_color:
+            if board[Cord(1,1)]== my_color:
                 my_tiles += 1
-            elif board[1][1] == opp_color:
+            elif board[Cord(1,1)] == opp_color:
                 opp_tiles += 1
-            if board[1][0] == my_color:
+            if board[Cord(1,0)] == my_color:
                 my_tiles += 1
-            elif board[1][0] == opp_color:
-                opp_tiles += 1
-
-        if board[0][7] == ' ':
-            if board[0][6] == my_color:
-                my_tiles += 1
-            elif board[0][6] == opp_color:
-                opp_tiles += 1
-            if board[1][6] == my_color:
-                my_tiles += 1
-            elif board[1][6] == opp_color:
-                opp_tiles += 1
-            if board[1][7] == my_color:
-                my_tiles += 1
-            elif board[1][7] == opp_color:
+            elif board[Cord(1,0)] == opp_color:
                 opp_tiles += 1
 
-        if board[7][0] == ' ':
-            if board[7][1] == my_color:
+        if board[Cord(0,7)] == ' ':
+            if board[Cord(0,6)] == my_color:
                 my_tiles += 1
-            elif board[7][1] == opp_color:
+            elif board[Cord(0,6)] == opp_color:
                 opp_tiles += 1
-            if board[6][1] == my_color:
+            if board[Cord(1,6)] == my_color:
                 my_tiles += 1
-            elif board[6][1] == opp_color:
+            elif board[Cord(1, 6)] == opp_color:
                 opp_tiles += 1
-            if board[6][0] == my_color:
+            if board[Cord(1, 7)] == my_color:
                 my_tiles += 1
-            elif board[6][0] == opp_color:
+            elif board[Cord(1, 7)] == opp_color:
                 opp_tiles += 1
 
-        if board[7][7] == ' ':
-            if board[6][7] == my_color:
+        if board[Cord(7,0)] == ' ':
+            if board[Cord(7,1)] == my_color:
                 my_tiles += 1
-            elif board[6][7] == opp_color:
+            elif board[Cord(7,1)] == opp_color:
                 opp_tiles += 1
-            if board[6][6] == my_color:
+            if board[Cord(6,1)] == my_color:
                 my_tiles += 1
-            elif board[6][6] == opp_color:
+            elif board[Cord(6,1)] == opp_color:
                 opp_tiles += 1
-            if board[7][6] == my_color:
+            if board[Cord(6,0)] == my_color:
                 my_tiles += 1
-            elif board[7][6] == opp_color:
+            elif board[Cord(6,0)] == opp_color:
+                opp_tiles += 1
+
+        if board[Cord(7,7)] == Color.EMPTY:
+            if board[Cord(6,7)] == my_color:
+                my_tiles += 1
+            elif board[Cord(6,7)] == opp_color:
+                opp_tiles += 1
+            if board[Cord(6,6)] == my_color:
+                my_tiles += 1
+            elif board[Cord(6,6)] == opp_color:
+                opp_tiles += 1
+            if board[Cord(7,6)] == my_color:
+                my_tiles += 1
+            elif board[Cord(7,6)] == opp_color:
                 opp_tiles += 1
 
         l = -12.5 * (my_tiles - opp_tiles)
