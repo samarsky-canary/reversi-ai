@@ -18,7 +18,7 @@ def bot_turn(ed_board: list[list[Color]], ed_color: Color) -> tuple[int, int]:
     return move.x, move.y
 
 # ===================================================================================
-# Coordinates
+# GameState
 # ===================================================================================
 class GameState(Enum):
     IN_PROGRESS = 0
@@ -35,11 +35,11 @@ class Cord():
         self.x = x
         self.y = y
 
-    # gets two cordinations and returns the sum of them as new Coord
+    # gets two cordinations and returns the sum of them as new Cord
     def __add__(self, other):
         return Cord(self.x + other.x, self.y + other.y)
 
-    # compares two Coords
+    # compares two Cords
     def __eq__(self, other):
         return self.x == other.x and self.y == other.y
 
@@ -49,15 +49,14 @@ class Cord():
     def __hash__(self):
         return hash((self.x, self.y))
 
-    # string representaition of object
     def __str__(self):
         return "({}, {})".format(self.x, self.y)
 
-    # defines if Coord is in right domain
+    # defines if Cord is in right domain
     def is_in_board(self):
         return min(self.x, self.y) >= 0 and max(self.x, self.y) < 8
 
-    # maybe related to flipping
+    # flipping
     def to(self, end, step):
         if (end.x - self.x) * step.y != (end.y - self.y) * step.x:
             raise Exception("Invalid cords")
@@ -73,7 +72,6 @@ class Cord():
 # Game
 # ===================================================================================
 class Game:
-    # surronding of a stone
     DIRECTIONS = [Cord(x, y)
                   for x, y in [(-1, -1), (-1, 0), (0, -1), (1, -1), (-1, 1), (0, 1), (1, 0), (1, 1)]]
 
@@ -103,7 +101,6 @@ class Game:
     def enemy_color(self):
         return Color.BLACK if self.current_player == Color.WHITE else Color.WHITE
 
-    # determines if the disk in the given coordination is current players or not
     def is_enemy_field(self, cord):
         return (cord.is_in_board() and
                 self.board[cord] not in [self.current_player, Color.EMPTY])
@@ -111,16 +108,13 @@ class Game:
     def is_friend_field(self, cord):
         return cord.is_in_board() and self.board[cord] == self.current_player
 
-    # checking if the disc is empty
     def is_empty_field(self, coord):
         return coord.is_in_board() and self.board[coord] == Color.EMPTY
 
-    # returns an array of all current player discs
     def friend_fields(self):
         fields = [Cord(i, j) for i in range(8) for j in range(8)]
         return [cord for cord in fields if self.board[cord] == self.current_player]
 
-    # array of black player discs
     def enemy_fields(self):
         enemy_color = self.enemy_color()
         fields = [Cord(i, j) for i in range(8) for j in range(8)]
@@ -130,11 +124,9 @@ class Game:
         fields = [Cord(i, j) for i in range(8) for j in range(8)]
         return [cord for cord in fields if self.board[cord] == color]
 
-    # changes the turn
     def change_player(self):
         self.current_player = self.enemy_color()
 
-    # array of clickable cordinations
     def available_moves(self):
         friends = self.friend_fields()
         av_fields = []
@@ -147,7 +139,6 @@ class Game:
                         av_fields += [field]
         return av_fields
 
-    # if coordination is in available fields
     def is_valid_move(self, cord):
         return cord in self.available_moves()
 
@@ -160,7 +151,6 @@ class Game:
         if not self.is_valid_move(move):
             raise Exception("Not valid move")
 
-        # fields that are flipped after a move
         won_fields = []
         for direction in self.DIRECTIONS:
             field = move + direction
@@ -170,23 +160,18 @@ class Game:
             if self.is_friend_field(field):
                 won_fields += move.to(field, direction)
 
-        # change the field to the player's field
         for move in won_fields:
             self.board[move] = self.current_player
 
-        # update player result after each move
         self.blacks = len(self.colored_fields(Color.BLACK))
         self.whites = len(self.colored_fields(Color.WHITE))
         self.change_player()
         self.game_state = self.outcome()
 
-    # run after every move
     def outcome(self):
-        # change player if there is no move for first player
         if not self.available_moves():
             self.change_player()
 
-            # if second player had no move determine the winner
             if not self.available_moves():
                 if self.whites > self.blacks:
                     return GameState.WHITE_WINS
@@ -204,7 +189,6 @@ class Game:
             return 'x'
         return ' '
 
-    # returns a string of current board situation
     @staticmethod
     def print_board(board):
         output = ''
